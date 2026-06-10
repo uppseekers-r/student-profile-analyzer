@@ -1,15 +1,16 @@
 import streamlit as st
+import pandas as pd
 from pypdf import PdfReader
 
 # Page Configuration
 st.set_page_config(
-    page_title="Admissions Profile Analyzer",
-    page_icon="🎯",
+    page_title="Holistic Profile Matcher",
+    page_icon="🎓",
     layout="wide"
 )
 
-st.title("🎯 Holistic Student Profile Analyzer")
-st.write("Fill out the candidate evaluation portfolio below to automatically calculate their holistic tier score and match target universities.")
+st.title("🎯 Holistic Student Profile Analyzer & Placement Matcher")
+st.write("Fill out the evaluation metrics below to automatically calculate a candidate profile score and map calibrated university tiers.")
 
 # --- FORM ENTRY ---
 with st.form("comprehensive_profile_form"):
@@ -28,28 +29,25 @@ with st.form("comprehensive_profile_form"):
         )
         countries = st.multiselect(
             "Preferred Countries (Select max 3)",
-            ["US", "UK", "Canada", "Singapore", "Ireland", "Australia", "New Zealand", "Germany", "France", "Japan"],
+            ["US", "UK", "Canada", "Singapore", "Ireland", "Australia", "New Zealand", "Germany", "France", "Japan", "Netherlands", "Hong Kong", "UAE"],
             max_selections=3
         )
 
-    # 2. Academics Grid
-    st.subheader("2. Academic Metrics (Grades 6-12)")
+    # 2. Academics Grid (Grades 8-12 only)
+    st.subheader("2. Academic Metrics (Grades 8-12)")
     st.caption("Provide percentages for completed terms. Leave at 0.0 if not completed yet.")
-    g_col1, g_col2, g_col3, g_col4 = st.columns(4)
+    g_col1, g_col2, g_col3 = st.columns(3)
     with g_col1:
-        g6 = st.number_input("Grade 6 (%)", min_value=0.0, max_value=100.0, value=0.0)
-        g7 = st.number_input("Grade 7 (%)", min_value=0.0, max_value=100.0, value=0.0)
-    with g_col2:
         g8 = st.number_input("Grade 8 (%)", min_value=0.0, max_value=100.0, value=0.0)
         g9 = st.number_input("Grade 9 (%)", min_value=0.0, max_value=100.0, value=0.0)
-    with g_col3:
+    with g_col2:
         g10 = st.number_input("Grade 10 (%)", min_value=0.0, max_value=100.0, value=0.0)
         g11 = st.number_input("Grade 11 (%)", min_value=0.0, max_value=100.0, value=0.0)
-    with g_col4:
+    with g_col3:
         g12 = st.number_input("Grade 12 (%)", min_value=0.0, max_value=100.0, value=0.0)
         sat_act = st.number_input("SAT / ACT Standardized Score (Enter 0 if not taken)", min_value=0, max_value=1600, value=0, step=10)
 
-    # 3. Core Extracurricular Tiers
+    # 3. Core Profile Pillars
     st.subheader("3. Core Profile Pillars")
     p_col1, p_col2, p_col3 = st.columns(3)
     
@@ -110,19 +108,18 @@ if submit_button:
                     if text_content:
                         full_pdf_text += text_content.lower()
                 
-                # Check for common traits within a psychometric report
                 traits = ["analytical", "creative", "leadership", "technical", "artistic", "social", "enterprising"]
                 for trait in traits:
                     if trait in full_pdf_text:
                         pdf_keywords_found.append(trait.capitalize())
             except Exception as e:
-                st.warning("Psychometric PDF processed, but could not systematically extract text metadata.")
+                st.warning("Psychometric PDF attached, but text parsing extraction skipped.")
 
         # B. Core Score Computation Matrix (Base 100 System)
         score = 0.0
         
-        # 1. Academic Tracking (Weight: 40 points)
-        valid_grades = [g for g in [g6, g7, g8, g9, g10, g11, g12] if g > 0]
+        # 1. Academic Tracking (Weight: 40 points) - Grade 8 to 12 strictly
+        valid_grades = [g for g in [g8, g9, g10, g11, g12] if g > 0]
         academic_avg = sum(valid_grades) / len(valid_grades) if valid_grades else 0.0
         score += (academic_avg / 100) * 35
         
@@ -166,98 +163,110 @@ if submit_button:
         with col_m1:
             st.metric("Composite Profile Score", f"{final_score} / 100")
         with col_m2:
-            st.metric("Academic Track Average", f"{round(academic_avg, 1)}%")
+            st.metric("Academic Track Average (G8-G12)", f"{round(academic_avg, 1)}%")
         with col_m3:
             st.metric("Psychometric Status", "Attached ✅" if uploaded_pdf else "No File Added ⚠️")
 
         if pdf_keywords_found:
             st.info(f"🧬 **Extracted Psychometric Traits:** {', '.join(pdf_keywords_found)}")
 
-        # D. University Mapping Directory Matrix
-        uni_db = {
+        # D. Unified Knowledge Base for Universities (Mapped by Country and Broad Clusters)
+        # To avoid massive empty data frames, if a niche combo isn't explicit, it gracefully uses the country baseline.
+        uni_master_db = {
             "US": {
-                "Dream": ["Harvard", "Stanford", "MIT", "Columbia University", "UPenn"],
-                "Target": ["NYU", "Boston University", "UIUC", "Purdue University", "USC"],
-                "Safe": ["Arizona State University", "Penn State", "Rutgers", "Ohio State", "UT Dallas"]
+                "Engineering": {"Dream": "MIT, Stanford, UC Berkeley", "Target": "Purdue, UIUC, Georgia Tech", "Safe": "ASU, Penn State, Ohio State"},
+                "Tech/AI": {"Dream": "Carnegie Mellon, Stanford, MIT", "Target": "UT Austin, University of Washington", "Safe": "UT Dallas, Rutgers"},
+                "Finance": {"Dream": "UPenn (Wharton), NYU (Stern)", "Target": "UMich (Ross), UVa (McIntire)", "Safe": "Indiana Kelly, Penn State"},
+                "Business Administration": {"Dream": "Harvard, UPenn, UC Berkeley", "Target": "USC (Marshall), BU, NYU", "Safe": "Rutgers, ASU"},
+                "Default": {"Dream": "Harvard, Stanford, Columbia", "Target": "NYU, Boston University, USC", "Safe": "Arizona State University, Rutgers, Penn State"}
             },
             "UK": {
-                "Dream": ["Oxford", "Cambridge", "Imperial College London", "LSE"],
-                "Target": ["University of Edinburgh", "King's College London", "Manchester", "Warwick"],
-                "Safe": ["University of Birmingham", "Leeds", "Southampton", "Lancaster"]
+                "Engineering": {"Dream": "Cambridge, Imperial College London", "Target": "Manchester, University of Edinburgh", "Safe": "Southampton, Leeds"},
+                "Tech/AI": {"Dream": "Oxford, Imperial College London", "Target": "UCL, Edinburgh", "Safe": "Birmingham, Lancaster"},
+                "Finance": {"Dream": "LSE, Oxford, Cambridge", "Target": "Warwick, Cass Business School", "Safe": "Leeds, Nottingham"},
+                "Default": {"Dream": "Oxford, Cambridge, Imperial, LSE", "Target": "Edinburgh, King's College London, Warwick", "Safe": "Birmingham, Leeds, Lancaster"}
             },
             "Canada": {
-                "Dream": ["University of Toronto", "UBC", "McGill University"],
-                "Target": ["University of Waterloo", "McMaster", "University of Alberta", "Western"],
-                "Safe": ["York University", "Simon Fraser University", "Concordia", "UVic"]
+                "Tech/AI": {"Dream": "University of Toronto, UBC", "Target": "University of Waterloo, McGill", "Safe": "Concordia, Simon Fraser"},
+                "Engineering": {"Dream": "U of Toronto, UBC", "Target": "Waterloo, McMaster", "Safe": "York University, UVic"},
+                "Default": {"Dream": "University of Toronto, UBC, McGill", "Target": "Waterloo, McMaster, Western", "Safe": "York University, Simon Fraser, Concordia"}
             },
             "Singapore": {
-                "Dream": ["NUS", "NTU"],
-                "Target": ["SMU (Singapore Management University)"],
-                "Safe": ["SUTD", "SIM Global Education"]
+                "Default": {"Dream": "NUS (National Univ of Singapore), NTU", "Target": "SMU (Singapore Management University)", "Safe": "SUTD, SIM Global Education"}
             },
-            "Australia": {
-                "Dream": ["University of Melbourne", "University of Sydney", "UNSW Sydney"],
-                "Target": ["Monash University", "UQ", "ANU", "University of Adelaide"],
-                "Safe": ["UTS", "Macquarie University", "RMIT University"]
+            "Netherlands": {
+                "Tech/AI": {"Dream": "TU Delft, University of Amsterdam", "Target": "Eindhoven Univ of Tech, Utrecht Univ", "Safe": "Twente, Vrije Universiteit Amsterdam"},
+                "Engineering": {"Dream": "TU Delft, Eindhoven University of Tech", "Target": "Twente University, Groningen", "Safe": "HAN University of Applied Sciences"},
+                "Default": {"Dream": "TU Delft, University of Amsterdam", "Target": "Eindhoven Tech, Utrecht University, Leiden", "Safe": "University of Twente, Radboud University"}
+            },
+            "Hong Kong": {
+                "Default": {"Dream": "HKU (Univ of Hong Kong), HKUST", "Target": "Chinese University of Hong Kong (CUHK)", "Safe": "City University of HK, PolyU HK"}
+            },
+            "UAE": {
+                "Default": {"Dream": "NYU Abu Dhabi, Khalifa University", "Target": "American University of Sharjah, UAEU", "Safe": "Heriot-Watt Dubai, Birmingham Dubai"}
             },
             "Ireland": {
-                "Dream": ["Trinity College Dublin"],
-                "Target": ["University College Dublin (UCD)", "University of Galway"],
-                "Safe": ["Dublin City University (DCU)", "University of Limerick"]
+                "Default": {"Dream": "Trinity College Dublin", "Target": "University College Dublin (UCD), Galway", "Safe": "Dublin City University (DCU), Limerick"}
             },
-            "Germany": {
-                "Dream": ["TU Munich", "LMU Munich"],
-                "Target": ["RWTH Aachen", "Heidelberg University", "TU Berlin"],
-                "Safe": ["Karlsruhe Institute of Technology", "University of Freiburg"]
-            },
-            "France": {
-                "Dream": ["HEC Paris", "Sciences Po", "Sorbonne University"],
-                "Target": ["École Polytechnique", "Université Paris-Saclay"],
-                "Safe": ["NEOMA Business School", "SKEMA Business School"]
-            },
-            "Japan": {
-                "Dream": ["University of Tokyo", "Kyoto University"],
-                "Target": ["Osaka University", "Tohoku University", "Waseda University"],
-                "Safe": ["Keio University", "Kyushu University"]
+            "Australia": {
+                "Default": {"Dream": "University of Melbourne, University of Sydney, UNSW", "Target": "Monash University, ANU, Univ of Queensland", "Safe": "UTS, Macquarie University, RMIT"}
             },
             "New Zealand": {
-                "Dream": ["University of Auckland"],
-                "Target": ["University of Otago", "Victoria University of Wellington"],
-                "Safe": ["University of Canterbury", "Massey University"]
+                "Default": {"Dream": "University of Auckland", "Target": "University of Otago, Victoria University", "Safe": "University of Canterbury, Massey"}
+            },
+            "Germany": {
+                "Default": {"Dream": "TU Munich, LMU Munich", "Target": "RWTH Aachen, Heidelberg, TU Berlin", "Safe": "Karlsruhe Institute of Technology, Freiburg"}
+            },
+            "France": {
+                "Default": {"Dream": "HEC Paris, Sciences Po, Sorbonne", "Target": "École Polytechnique, Université Paris-Saclay", "Safe": "NEOMA, SKEMA Business School"}
+            },
+            "Japan": {
+                "Default": {"Dream": "University of Tokyo, Kyoto University", "Target": "Osaka University, Tohoku, Waseda", "Safe": "Keio University, Kyushu"}
             }
         }
 
-        # Dynamic Target Calibration Algorithm 
-        st.subheader("🎯 Institutional Category Matrix")
-        st.write(f"Tailored mapping for tracking streams: **{', '.join(career_choices)}**")
+        # E. Table Construction Engine
+        st.subheader("🎯 Calibrated Institutional Matrix")
+        st.write("Below are the placement targeting matrices cross-referenced by your selected countries and career streams:")
 
         for country in countries:
-            st.markdown(f"#### 📍 {country} Allocation")
+            st.markdown(f"#### 📍 Destination Country: {country}")
             
-            orig_dream = uni_db.get(country, {}).get("Dream", [])
-            orig_target = uni_db.get(country, {}).get("Target", [])
-            orig_safe = uni_db.get(country, {}).get("Safe", [])
+            # Setup structured data collection for tables
+            table_rows = []
+            
+            for career in career_choices:
+                # Fetch specific career mappings or fall back to standard regional database defaults
+                country_data = uni_master_db.get(country, uni_master_db["US"])
+                tier_mapping = country_data.get(career, country_data.get("Default"))
+                
+                raw_dream = tier_mapping["Dream"]
+                raw_target = tier_mapping["Target"]
+                raw_safe = tier_mapping["Safe"]
 
-            # Calibration shift rules depending on profile point score tiering
-            if final_score >= 88:
-                dream, target, safe = orig_dream, orig_target, orig_safe
-            elif final_score >= 72:
-                dream = orig_target
-                target = orig_safe
-                safe = [f"Regional Elite Institutes ({country})"]
-            else:
-                dream = orig_safe
-                target = [f"Regional Core Programs ({country})"]
-                safe = [f"International Pathway Providers ({country})"]
+                # Perform profile score adjustments (Slippage shifts if score is less than highly competitive)
+                if final_score >= 87:
+                    # No shifts required
+                    final_dream, final_target, final_safe = raw_dream, raw_target, raw_safe
+                elif final_score >= 70:
+                    # Shift downward: original target becomes dream, original safe becomes target
+                    final_dream = raw_target
+                    final_target = raw_safe
+                    final_safe = f"Regional Core Foundations / Pathway Institutes ({country})"
+                else:
+                    # Critical shift: original safe becomes dream tier recommendation
+                    final_dream = raw_safe
+                    final_target = f"State/Regional Access Colleges ({country})"
+                    final_safe = f"International Pathway & Foundation Track Programs ({country})"
 
-            # Visual Columns Layout
-            dr_col, tg_col, sf_col = st.columns(3)
-            with dr_col:
-                st.markdown("🔴 **Dream (Reach)**")
-                for u in dream: st.write(f"• {u}")
-            with tg_col:
-                st.markdown("🟡 **Target (Match)**")
-                for u in target: st.write(f"• {u}")
-            with sf_col:
-                st.markdown("🟢 **Safe (Safety)**")
-                for u in safe: st.write(f"• {u}")
+                table_rows.append({
+                    "Career Track": career,
+                    "❤️ Dream Universities": final_dream,
+                    "🎯 Target Universities": final_target,
+                    "🛡️ Safe Universities": final_safe
+                })
+            
+            # Convert to Pandas Dataframe and display as a beautiful clean table
+            df_country_matrix = pd.DataFrame(table_rows)
+            st.dataframe(df_country_matrix, use_container_width=True, hide_index=True)
+            st.write("") # Formatting space
